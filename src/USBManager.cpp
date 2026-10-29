@@ -1,8 +1,18 @@
+// ==============================================================================
+// Nguồn: https://github.com/KoStard/ESP32S3-USB-Keyboard-To-BLE/tree/main (USBManager1.cpp)
+// Giấy phép: MIT License
+// Mức độ sử dụng: Giữ nguyên
+// Nội dung nhóm đã sửa: Không sửa đổi thuật toán. Giữ nguyên 100% kiến trúc điều khiển
+//   USB Host và HID Driver trên ESP-IDF; bổ sung chú thích tiếng Việt chi tiết cho các hàm.
+// ==============================================================================
+
 #include "USBManager.h"
 #include <hid_usage_keyboard.h>
 
+// [GIỮ NGUYÊN TỪ GỐC]: Con trỏ hàm callback truyền gói tin ngắt sang Bridge
 KeyboardReportCallback USBManager::_keyboardCb = nullptr;
 
+// [GIỮ NGUYÊN TỪ GỐC]: Hàng đợi FreeRTOS quản lý sự kiện kết nối thiết bị HID
 static QueueHandle_t hid_host_event_queue;
 
 typedef struct {
@@ -11,8 +21,12 @@ typedef struct {
   void *arg;
 } hid_host_event_queue_t;
 
+// [GIỮ NGUYÊN TỪ GỐC]: Danh mục chuỗi tên giao thức HID
 static const char *hid_proto_name_str[] = {"NONE", "KEYBOARD", "MOUSE"};
 
+/**
+ * @brief [GIỮ NGUYÊN TỪ GỐC] Khởi tạo thư viện phần cứng USB Host và HID Host Driver trên Core 0
+ */
 void USBManager::begin() {
   Serial.println("[USB] Installing USB Host library...");
   BaseType_t task_created =
@@ -38,6 +52,9 @@ void USBManager::begin() {
   Serial.println("[USB] HID driver ready");
 }
 
+/**
+ * @brief [GIỮ NGUYÊN TỪ GỐC] Tác vụ FreeRTOS tiếp nhận và điều phối sự kiện ngắt USB Host Controller
+ */
 void USBManager::usb_lib_task(void *arg) {
   const usb_host_config_t host_config = {
       .skip_phy_setup = false,
@@ -57,6 +74,9 @@ void USBManager::usb_lib_task(void *arg) {
   }
 }
 
+/**
+ * @brief [GIỮ NGUYÊN TỪ GỐC] Tác vụ FreeRTOS đọc sự kiện từ hàng đợi Queue và gọi xử lý
+ */
 void USBManager::hid_host_task(void *pvParameters) {
   hid_host_event_queue_t evt_queue;
   hid_host_event_queue = xQueueCreate(10, sizeof(hid_host_event_queue_t));
@@ -69,6 +89,9 @@ void USBManager::hid_host_task(void *pvParameters) {
   }
 }
 
+/**
+ * @brief [GIỮ NGUYÊN TỪ GỐC] Callback từ tầng Driver đẩy sự kiện vào hàng đợi
+ */
 void USBManager::hid_host_device_callback(
     hid_host_device_handle_t hid_device_handle,
     const hid_host_driver_event_t event, void *arg) {
@@ -77,6 +100,9 @@ void USBManager::hid_host_device_callback(
   xQueueSend(hid_host_event_queue, &evt_queue, 0);
 }
 
+/**
+ * @brief [GIỮ NGUYÊN TỪ GỐC] Xử lý sự kiện cắm/rút thiết bị HID và thiết lập Boot Protocol
+ */
 void USBManager::hid_host_device_event(
     hid_host_device_handle_t hid_device_handle,
     const hid_host_driver_event_t event, void *arg) {
@@ -94,7 +120,7 @@ void USBManager::hid_host_device_event(
     Serial.printf("[USB] %s connected!\n",
                   hid_proto_name_str[dev_params.proto]);
 
-    // Skip NONE protocol devices to save hardware channels (max 8 on ESP32-S3)
+    // Bỏ qua các thiết bị giao thức NONE để tiết kiệm kênh phần cứng ESP32-S3 (tối đa 8 kênh)
     if (dev_params.proto == HID_PROTOCOL_NONE) {
       Serial.println("[USB] Skipping NONE protocol device to save channels");
       break;
@@ -105,6 +131,7 @@ void USBManager::hid_host_device_event(
       break;
     }
 
+    // Thiết lập giao thức Boot Protocol cho bàn phím
     if (HID_SUBCLASS_BOOT_INTERFACE == dev_params.sub_class) {
       hid_class_request_set_protocol(hid_device_handle,
                                      HID_REPORT_PROTOCOL_BOOT);
@@ -123,6 +150,9 @@ void USBManager::hid_host_device_event(
   }
 }
 
+/**
+ * @brief [GIỮ NGUYÊN TỪ GỐC] Callback tiếp nhận gói tin báo cáo phím thô (Input Report) từ bàn phím
+ */
 void USBManager::hid_host_interface_callback(
     hid_host_device_handle_t hid_device_handle,
     const hid_host_interface_event_t event, void *arg) {
@@ -136,11 +166,13 @@ void USBManager::hid_host_interface_callback(
 
   switch (event) {
   case HID_HOST_INTERFACE_EVENT_INPUT_REPORT:
+    // Đọc gói tin ngắt thô từ bàn phím
     if (hid_host_device_get_raw_input_report_data(hid_device_handle, data, 64,
                                                   &data_length) == ESP_OK) {
 
       if (HID_SUBCLASS_BOOT_INTERFACE == dev_params.sub_class) {
         if (HID_PROTOCOL_KEYBOARD == dev_params.proto) {
+          // Bắn dữ liệu (8-byte Boot Report) sang tầng Bridge
           if (_keyboardCb) {
             _keyboardCb(data, data_length);
           }
