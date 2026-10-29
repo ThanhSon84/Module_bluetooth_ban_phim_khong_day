@@ -1,4 +1,4 @@
-# Cầu Nối BLE HID: Biến Bàn Phím Có Dây Thành Bàn Phím Không Dây Multi-Host Dùng ESP32-S3
+# Module Bluetooth biến Bàn Phím Có Dây Thành Bàn Phím Không Dây Multi-Host Dùng ESP32-S3
 
 * **Học phần:** Xây dựng các hệ thống nhúng (INT1461) — Học kỳ 1, Năm học 2026 - 2027
 * **Cơ sở đào tạo:** Học viện Công nghệ Bưu chính Viễn thông (PTIT)
